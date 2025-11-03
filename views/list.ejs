@@ -1,0 +1,39 @@
+<% const pageTitle = 'CIRS – Übersicht'; %>
+<% layout('layout', { title: pageTitle, logoUrl }); %>
+
+<div class="card">
+  <h2 style="margin-top:0;">Übersicht Meldungen</h2>
+  <% if (ok) { %>
+    <div class="success" style="margin-bottom:12px;">Vielen Dank! Ihre Meldung wurde gespeichert und weitergeleitet.</div>
+  <% } %>
+  <% if (!rows.length) { %>
+    <p class="muted">Noch keine Einträge vorhanden.</p>
+  <% } else { %>
+    <div style="overflow:auto;">
+      <table aria-label="Liste der CIRS-Meldungen">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Erfasst</th>
+            <th>Kategorie</th>
+            <th>Titel</th>
+            <th>Standort</th>
+            <th>Material/Fzg.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(r => { %>
+            <tr>
+              <td><a class="btn-link" href="/report/<%= r.id %>"><%= r.id %></a></td>
+              <td><%= r.created_at %></td>
+              <td><span class="badge"><%= r.category %></span></td>
+              <td><a class="btn-link" href="/report/<%= r.id %>"><%= r.title %></a></td>
+              <td><%= r.location %></td>
+              <td><%= r.asset || '—' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>

@@ -1,0 +1,181 @@
+<% const pageTitle = readonly ? ('CIRS – Meldung #' + preset.id) : 'Neue CIRS-Meldung'; %>
+<% layout('layout', { title: pageTitle, logoUrl }); %>
+
+<div class="card" role="region" aria-label="CIRS-Meldeformular">
+  <% if (readonly) { %>
+    <h2 style="margin-top:0;">Meldung #<%= preset.id %></h2>
+    <p class="muted">Erfasst: <%= preset.created_at %></p>
+    <div class="grid two">
+      <div><strong>Kategorie:</strong> <%= preset.category %></div>
+      <div><strong>Datum & Zeit:</strong> <%= preset.when_ts %> (<%= preset.tz || 'TZ unbekannt' %>)</div>
+      <div><strong>Standort:</strong> <%= preset.location %></div>
+      <div><strong>Material/Fahrzeug:</strong> <%= preset.asset || '—' %></div>
+    </div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+    <div><strong>Kurztitel:</strong> <%= preset.title %></div>
+    <div style="margin-top:8px;"><strong>Beschreibung:</strong><br><pre style="white-space:pre-wrap; background:#f9f9f9; padding:10px; border-radius:8px;"><%= preset.description %></pre></div>
+    <div style="margin-top:8px;"><strong>Sofortmaßnahmen:</strong><br><pre style="white-space:pre-wrap; background:#f9f9f9; padding:10px; border-radius:8px;"><%= preset.immediate || '—' %></pre></div>
+    <div style="margin-top:8px;" class="muted"><strong>Kontakt (optional):</strong> <%= preset.contact_name || '—' %> <%= preset.contact_email ? '&lt;' + preset.contact_email + '&gt;' : '' %></div>
+    <div class="actions" style="margin-top:16px;">
+      <a href="/" class="btn-ghost">Zur Übersicht</a>
+    </div>
+  <% } else { %>
+    <h2 style="margin-top:0;">Neue Meldung</h2>
+    <form id="cirsForm" novalidate>
+      <div class="grid two">
+        <div>
+          <label for="category" class="req">Kategorie</label>
+          <select id="category" name="category" required>
+            <option value="">Bitte wählen…</option>
+            <option>Materialfehler</option>
+            <option>Bedienungsfehler</option>
+            <option>Beinahe-Fehler</option>
+            <option>Prozess/Organisation</option>
+            <option>Sonstiges</option>
+          </select>
+        </div>
+        <div>
+          <label for="when" class="req">Datum & Uhrzeit</label>
+          <input id="when" name="when" type="datetime-local" required />
+        </div>
+
+        <div>
+          <label for="location" class="req">Standort / Dienststelle</label>
+          <input id="location" name="location" placeholder="z. B. Wien – Zentrale" required />
+        </div>
+        <div>
+          <label for="asset">Betroffenes Material / Fahrzeug</label>
+          <input id="asset" name="asset" placeholder="z. B. RTW 3, Schaufeltrage, Defi…" />
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label for="title" class="req">Kurztitel</label>
+          <input id="title" name="title" placeholder="Ein prägnanter Betreff" required />
+        </div>
+
+        <div>
+          <label for="description" class="req">Beschreibung des Vorfalls</label>
+          <textarea id="description" name="description" placeholder="Was ist passiert? Welche Auswirkungen? Was wurde beobachtet?" required></textarea>
+        </div>
+
+        <div>
+          <label for="immediate">Ergriffene Sofortmaßnahmen</label>
+          <textarea id="immediate" name="immediate" placeholder="z. B. Gerät außer Betrieb genommen, Ersatzmaterial verwendet…"></textarea>
+        </div>
+
+        <div class="warning" style="padding:12px 14px; border-radius:10px;">
+          <strong>Wichtig:</strong> Bitte <strong>keine personenbezogenen Daten</strong> eintragen (keine Namen von Patient:innen oder Kolleg:innen).
+        </div>
+
+        <div class="row">
+          <input id="consent" name="consent" type="checkbox" required />
+          <label for="consent" class="req" style="font-weight:600;">Ich habe den Disclaimer gelesen und verstanden.</label>
+        </div>
+
+        <details>
+          <summary>Optional: Rückfragen ermöglichen</summary>
+          <div class="grid two" style="margin-top:10px;">
+            <div>
+              <label for="contactName">Kontaktname (optional)</label>
+              <input id="contactName" name="contactName" autocomplete="off" />
+            </div>
+            <div>
+              <label for="contactEmail">E-Mail (optional)</label>
+              <input id="contactEmail" name="contactEmail" type="email" autocomplete="off" />
+            </div>
+          </div>
+          <div class="muted" style="margin-top:6px;">Wenn leer, bleibt die Meldung anonym.</div>
+        </details>
+
+        <div id="feedback" aria-live="polite"></div>
+        <div class="actions">
+          <a href="/" class="btn-ghost">Abbrechen</a>
+          <button type="submit" class="btn-primary">Meldung absenden</button>
+        </div>
+      </div>
+    </form>
+  <% } %>
+</div>
+
+<% if (!readonly && showDisclaimer) { %>
+  <!-- Disclaimer-Modal -->
+  <div class="modal-backdrop" id="disclaimerBackdrop" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="disclaimerTitle" aria-describedby="disclaimerText">
+    <div class="modal" role="document">
+      <div class="modal__header">
+        <h2 id="disclaimerTitle" style="margin:0;">Wichtiger Hinweis (CIRS)</h2>
+      </div>
+      <div class="modal__body">
+        <p id="disclaimerText">
+          Dieses CIRS dient ausschließlich der <strong>Meldung von Material-, Bedienungs- und Prozessfehlern</strong> sowie Beinahe-Ereignissen, um daraus zu lernen und die Sicherheit zu erhöhen.
+        </p>
+        <div class="alert" role="note">
+          <strong>Keine persönlichen Beschwerden:</strong> Individuelle Konflikte, Leistungsbeurteilungen oder disziplinäre Themen haben hier <strong>keinen</strong> Platz. Wenden Sie sich dafür an die vorgesehenen Stellen.
+        </div>
+        <p class="muted">Bitte keine personenbezogenen Daten von Patient:innen oder Kolleg:innen eintragen.</p>
+        <p class="muted">Tipp: Mit <span class="kbd">Esc</span> schließen Sie das Fenster nicht – bitte aktiv bestätigen.</p>
+      </div>
+      <div class="modal__footer">
+        <a href="/" class="btn-ghost">Abbrechen</a>
+        <button type="button" class="btn-primary" id="disclaimerOk" aria-label="Disclaimer verstanden">Ich habe das verstanden</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Disclaimer & Formular-Submit nur auf der New-Seite
+    const backdrop = document.getElementById('disclaimerBackdrop');
+    const okBtn = document.getElementById('disclaimerOk');
+    const form = document.getElementById('cirsForm');
+    const feedback = document.getElementById('feedback');
+    const consent = document.getElementById('consent');
+
+    function openModal() {
+      backdrop.setAttribute('aria-hidden', 'false');
+      setTimeout(()=> okBtn.focus(), 50);
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal() {
+      backdrop.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      if (!consent.checked) consent.checked = true;
+    }
+    openModal();
+    okBtn.addEventListener('click', closeModal);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      feedback.textContent = '';
+      if (!form.reportValidity()) return;
+
+      const data = {
+        category: form.category.value,
+        when: form.when.value,
+        location: form.location.value,
+        asset: form.asset.value,
+        title: form.title.value,
+        description: form.description.value,
+        immediate: form.immediate.value,
+        contactName: form.contactName.value,
+        contactEmail: form.contactEmail.value,
+        userAgent: navigator.userAgent,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+
+      try {
+        const res = await fetch('/api/report', {
+          method:'POST',
+          headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+          body: JSON.stringify(data)
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.error || ('Serverfehler: ' + res.status));
+        window.location.href = '/?ok=1';
+      } catch (err) {
+        console.error(err);
+        feedback.innerHTML = '<div class="alert">Übermittlung fehlgeschlagen. Bitte später erneut versuchen oder den Fahrdienstleiter direkt kontaktieren.</div>';
+      }
+    });
+  </script>
+<% } %>
