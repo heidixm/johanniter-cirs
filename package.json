@@ -1,7 +1,12 @@
 {
   "name": "johanniter-cirs",
+  "version": "1.0.0",
+  "description": "CIRS-System für die Johanniter Österreich – Meldung von Material- und Bedienungsfehlern",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
