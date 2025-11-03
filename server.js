@@ -199,7 +199,6 @@ app.post('/api/report', async (req, res) => {
 // Fallback
 app.use((req, res) => res.status(404).send('404'));
 
-app.listen(PORT, () => {
-  console.log(`CIRS läuft auf http://localhost:${PORT}`);
-});
+const port = process.env.PORT || 3000;
+app.listen(port, '0.0.0.0', () => console.log(`CIRS läuft auf Port ${port}`));;
 

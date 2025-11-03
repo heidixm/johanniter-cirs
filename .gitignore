@@ -1,0 +1,6 @@
+node_modules/
+.env
+cirs.db
+git add .gitignore
+git commit -m "Add .gitignore to exclude secrets and DB"
+git push
