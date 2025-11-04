@@ -1,206 +1,217 @@
-import express from 'express';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import nodemailer from 'nodemailer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import Database from 'better-sqlite3';
-import expressLayouts from 'express-ejs-layouts';
+// server.js — Render-ready, EJS-Layouts, SQLite in /tmp, Healthcheck, layout()-Shim
+
+import fs from "fs";
+import path from "path";
+import url from "url";
+import express from "express";
+import helmet from "helmet";
+import morgan from "morgan";
+import rateLimit from "express-rate-limit";
+import ejsLayouts from "express-ejs-layouts";
+import dotenv from "dotenv";
+import nodemailer from "nodemailer";
+import Database from "better-sqlite3";
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const {
-  PORT = 3000,
-  DATABASE_PATH = './data/cirs.db', // <-- sicherer Default
-  SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS,
-  MAIL_FROM, MAIL_TO
-} = process.env;
-
-const LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Logo_der_Johanniter_Unfall-Hilfe.svg/1200px-Logo_der_Johanniter_Unfall-Hilfe.svg.png';
-
-// --- App-Basis ---
 const app = express();
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(expressLayouts);
-app.set('layout', 'layout');
 
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json({ limit: '200kb' }));
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+/* ---------------------- Security & Basics ---------------------- */
+app.set("trust proxy", 1);
+app.use(helmet());
+app.use(morgan(process.env.LOG_FORMAT || "tiny"));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-const apiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20 });
-app.use('/api/', apiLimiter);
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
-// --- DB: Pfad sicherstellen + DB öffnen ---
-let dbPath = DATABASE_PATH || './data/cirs.db';
+/* ---------------------- Views (EJS + Layouts) ---------------------- */
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(ejsLayouts);
+app.set("layout", "layout");
+
+// 🔧 Shim: Falls in einer View noch `layout('layout', {...})` steht (ejs-locals Syntax),
+// definieren wir eine harmlose Dummy-Funktion, damit kein ReferenceError entsteht.
+app.use((req, res, next) => {
+  if (typeof res.locals.layout !== "function") {
+    res.locals.layout = function shimLayout(_name, locals) {
+      // Optional: Werte wie title/logoUrl in res.locals übernehmen
+      if (locals && typeof locals === "object") {
+        Object.assign(res.locals, locals);
+      }
+      // Keine Rückgabe nötig – express-ejs-layouts rendert <%- body %> ohnehin.
+    };
+  }
+  next();
+});
+
+// Globale Variablen fürs Layout
+app.use((req, res, next) => {
+  res.locals.logoUrl =
+    "https://upload.wikimedia.org/wikipedia/commons/4/4d/Johanniter-Unfall-Hilfe_logo.svg";
+  next();
+});
+
+/* ---------------------- SQLite-Setup ---------------------- */
+const DEFAULT_LOCAL_DB = path.join(__dirname, "data", "cirs.db");
+const RUNTIME_DB =
+  process.env.DATABASE_PATH ||
+  (process.env.RENDER ? "/tmp/cirs.db" : DEFAULT_LOCAL_DB);
+const REPO_DB = DEFAULT_LOCAL_DB;
+
+if (!fs.existsSync(path.dirname(RUNTIME_DB))) {
+  fs.mkdirSync(path.dirname(RUNTIME_DB), { recursive: true });
+}
+
 try {
-  const dir = path.dirname(dbPath);
-  if (dir && dir !== '.' && !fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(RUNTIME_DB) && fs.existsSync(REPO_DB)) {
+    fs.copyFileSync(REPO_DB, RUNTIME_DB);
+    console.log(`[DB] Kopiert: ${REPO_DB} → ${RUNTIME_DB}`);
   }
 } catch (e) {
-  console.warn('[DB] Verzeichnis konnte nicht erstellt werden:', e?.message);
-  dbPath = './data/cirs.db';
-  const fallbackDir = path.dirname(dbPath);
-  if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
+  console.warn("[DB] Kopieren fehlgeschlagen (non-fatal):", e.message);
 }
-console.log('[DB] Pfad:', dbPath);
 
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
-db.prepare(`
+const db = new Database(RUNTIME_DB);
+db.pragma("journal_mode = WAL");
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,
     category TEXT NOT NULL,
-    when_ts TEXT NOT NULL,
+    title TEXT NOT NULL,
     location TEXT NOT NULL,
     asset TEXT,
-    title TEXT NOT NULL,
     description TEXT NOT NULL,
     immediate TEXT,
+    when_ts TEXT,
+    tz TEXT,
     contact_name TEXT,
-    contact_email TEXT,
-    user_agent TEXT,
-    tz TEXT
-  )
-`).run();
-
-// --- Mailer ---
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: Number(SMTP_PORT || 587),
-  secure: String(SMTP_SECURE).toLowerCase() === 'true',
-  auth: (SMTP_USER && SMTP_PASS) ? { user: SMTP_USER, pass: SMTP_PASS } : undefined
-});
-
-// --- Utils ---
-function clean(str = '', max = 5000) { return String(str).replace(/\s+/g, ' ').trim().slice(0, max); }
-function required(v) { return v && String(v).trim().length > 0; }
-
-// --- Routes ---
-app.get('/', (req, res) => {
-  const rows = db.prepare(`
-    SELECT id, created_at, category, title, location, asset
-    FROM reports
-    ORDER BY id DESC
-    LIMIT 500
-  `).all();
-
-  res.render('list', {
-    title: 'CIRS – Übersicht',
-    logoUrl: LOGO_URL,
-    rows,
-    ok: req.query.ok === '1'
-  });
-});
-
-app.get('/report/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const row = db.prepare(`SELECT * FROM reports WHERE id = ?`).get(id);
-  if (!row) return res.status(404).send('Nicht gefunden');
-
-  res.render('new', {
-    title: `CIRS – Meldung #${row.id}`,
-    logoUrl: LOGO_URL,
-    preset: row,
-    readonly: true,
-    showDisclaimer: false
-  });
-});
-
-app.get('/new', (req, res) => {
-  res.render('new', {
-    title: 'Neue CIRS-Meldung',
-    logoUrl: LOGO_URL,
-    preset: null,
-    readonly: false,
-    showDisclaimer: true
-  });
-});
-
-app.post('/api/report', async (req, res) => {
-  const { category, when, location, asset, title, description, immediate, contactName, contactEmail, userAgent, tz } = req.body || {};
-
-  if (!required(category) || !required(when) || !required(location) || !required(title) || !required(description)) {
-    return res.status(400).json({ error: 'Pflichtfelder fehlen.' });
-  }
-
-  const nowIso = new Date().toISOString();
-  const data = {
-    category: clean(category, 200),
-    when_ts: clean(when, 64),
-    location: clean(location, 300),
-    asset: clean(asset, 300),
-    title: clean(title, 300),
-    description: clean(description, 5000),
-    immediate: clean(immediate, 2000),
-    contact_name: clean(contactName, 200),
-    contact_email: clean(contactEmail, 300),
-    user_agent: clean(userAgent || req.headers['user-agent'] || '', 500),
-    tz: clean(tz || '', 64)
-  };
-
-  const info = db.prepare(`
-    INSERT INTO reports (created_at, category, when_ts, location, asset, title, description, immediate, contact_name, contact_email, user_agent, tz)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    nowIso, data.category, data.when_ts, data.location, data.asset,
-    data.title, data.description, data.immediate, data.contact_name,
-    data.contact_email, data.user_agent, data.tz
+    contact_email TEXT
   );
+`);
 
-  const subject = `[CIRS] ${data.category} – ${data.title}`;
-  const text = [
-    `Kategorie: ${data.category}`,
-    `Zeitpunkt: ${data.when_ts} (${data.tz || 'TZ unbekannt'})`,
-    `Standort/Dienststelle: ${data.location}`,
-    `Material/Fahrzeug: ${data.asset || '—'}`,
-    ``,
-    `BESCHREIBUNG:`,
-    data.description,
-    ``,
-    `Sofortmaßnahmen:`,
-    data.immediate || '—',
-    ``,
-    `Kontakt (optional): ${data.contact_name || '—'} ${data.contact_email ? `<${data.contact_email}>` : ''}`,
-    ``,
-    `Technik: ${data.user_agent}`,
-    `Erfasst: ${nowIso}`,
-    `Report-ID: ${info.lastInsertRowid}`
-  ].join('\n');
+/* ---------------------- Mail (optional) ---------------------- */
+let mailer = null;
+if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  mailer = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: false,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  });
+}
 
+/* ---------------------- Routes ---------------------- */
+app.get("/healthz", (req, res) => res.type("text").send("ok"));
+
+app.get("/", (req, res, next) => {
   try {
-    if (SMTP_HOST) {
-      await transporter.sendMail({
-        from: MAIL_FROM || SMTP_USER,
-        to: MAIL_TO || 'fahrdienstleiter@example.org',
-        subject,
-        text
-      });
-    }
-  } catch (e) {
-    console.error('Mail-Fehler:', e);
-    return res.status(502).json({ error: 'Mailversand fehlgeschlagen, Meldung wurde aber gespeichert.' });
+    const rows = db
+      .prepare(
+        `SELECT id, created_at, category, title, location, COALESCE(asset,'') as asset
+         FROM reports
+         ORDER BY id DESC`
+      )
+      .all();
+    res.render("list", {
+      title: "CIRS – Übersicht",
+      rows,
+      ok: req.query.ok === "1",
+    });
+  } catch (err) {
+    next(err);
   }
-
-  const accept = (req.headers['accept'] || '').toLowerCase();
-  if (accept.includes('application/json')) return res.json({ ok: true, id: info.lastInsertRowid });
-  return res.redirect('/?ok=1');
 });
 
-app.use((req, res) => res.status(404).send('404'));
+app.get("/report/:id", (req, res, next) => {
+  try {
+    const row = db
+      .prepare(`SELECT * FROM reports WHERE id = ?`)
+      .get(Number(req.params.id));
+    if (!row) return res.status(404).type("text").send("Not found");
+    res.render("new", { readonly: true, preset: row, showDisclaimer: false });
+  } catch (err) {
+    next(err);
+  }
+});
 
-const port = Number(process.env.PORT || PORT);
-app.listen(port, '0.0.0.0', () => {
-  console.log(`CIRS läuft auf 0.0.0.0:${port}`);
+app.get("/new", (req, res) => {
+  res.render("new", { readonly: false, showDisclaimer: true });
+});
+
+app.post("/submit", (req, res, next) => {
+  try {
+    const required = ["category", "when", "location", "title", "description"];
+    for (const f of required) {
+      if (!req.body[f] || String(req.body[f]).trim() === "") {
+        return res.status(400).type("text").send(`Feld fehlt: ${f}`);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
+    const stmt = db.prepare(`
+      INSERT INTO reports
+        (created_at, category, title, location, asset, description, immediate, when_ts, tz, contact_name, contact_email)
+      VALUES
+        (@created_at, @category, @title, @location, @asset, @description, @immediate, @when_ts, @tz, @contact_name, @contact_email)
+    `);
+
+    const info = stmt.run({
+      created_at: nowIso,
+      category: req.body.category,
+      title: req.body.title,
+      location: req.body.location,
+      asset: req.body.asset || null,
+      description: req.body.description,
+      immediate: req.body.immediate || null,
+      when_ts: req.body.when,
+      tz,
+      contact_name: req.body.contactName || null,
+      contact_email: req.body.contactEmail || null,
+    });
+
+    if (mailer && process.env.MAIL_TO) {
+      const url = `${req.protocol}://${req.get("host")}/report/${info.lastInsertRowid}`;
+      mailer
+        .sendMail({
+          from: process.env.MAIL_FROM || process.env.SMTP_USER,
+          to: process.env.MAIL_TO,
+          subject: `[CIRS] ${req.body.category}: ${req.body.title}`,
+          text: `Neue CIRS-Meldung #${info.lastInsertRowid}\n\n${url}\n`,
+        })
+        .catch((e) => console.warn("[MAIL] Versand fehlgeschlagen (non-fatal):", e.message));
+    }
+
+    res.redirect("/?ok=1");
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).type("text").send("Interner Fehler");
+});
+
+/* ---------------------- Start Server ---------------------- */
+const PORT = Number(process.env.PORT || 3000);
+const HOST = "0.0.0.0";
+app.listen(PORT, HOST, () => {
+  console.log(`[DB] Pfad: ${RUNTIME_DB}`);
+  console.log(`CIRS läuft auf ${HOST}:${PORT}`);
 });
