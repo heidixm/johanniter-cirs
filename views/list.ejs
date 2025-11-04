@@ -1,39 +1,41 @@
-<% const pageTitle = 'CIRS – Übersicht'; %>
-<% layout('layout', { title: pageTitle, logoUrl }); %>
+<% layout('layout', { title: 'CIRS – Übersicht', logoUrl: '/logo.png' }); %>
+
+<div class="actions">
+  <a class="btn" href="/new">Neue Meldung erfassen</a>
+</div>
 
 <div class="card">
-  <h2 style="margin-top:0;">Übersicht Meldungen</h2>
+  <h2>Übersicht Meldungen</h2>
+
   <% if (ok) { %>
-    <div class="success" style="margin-bottom:12px;">Vielen Dank! Ihre Meldung wurde gespeichert und weitergeleitet.</div>
+    <div class="success" style="margin:12px 0;">Vielen Dank! Ihre Meldung wurde gespeichert und weitergeleitet.</div>
   <% } %>
-  <% if (!rows.length) { %>
-    <p class="muted">Noch keine Einträge vorhanden.</p>
+
+  <% if (!rows || !rows.length) { %>
+    <p class="muted" style="margin-top:10px;">Noch keine Einträge vorhanden.</p>
   <% } else { %>
-    <div style="overflow:auto;">
-      <table aria-label="Liste der CIRS-Meldungen">
-        <thead>
+    <table class="table" style="margin-top:14px;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Kategorie</th>
+          <th>Titel</th>
+          <th>Ort</th>
+          <th>Erfasst am</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(r => { %>
           <tr>
-            <th>ID</th>
-            <th>Erfasst</th>
-            <th>Kategorie</th>
-            <th>Titel</th>
-            <th>Standort</th>
-            <th>Material/Fzg.</th>
+            <td><a href="/report/<%= r.id %>"><%= r.id %></a></td>
+            <td><%= r.category %></td>
+            <td><%= r.title %></td>
+            <td><%= r.location %></td>
+            <td><%= (r.created_at||'').substring(0,10) %></td>
           </tr>
-        </thead>
-        <tbody>
-          <% rows.forEach(r => { %>
-            <tr>
-              <td><a class="btn-link" href="/report/<%= r.id %>"><%= r.id %></a></td>
-              <td><%= r.created_at %></td>
-              <td><span class="badge"><%= r.category %></span></td>
-              <td><a class="btn-link" href="/report/<%= r.id %>"><%= r.title %></a></td>
-              <td><%= r.location %></td>
-              <td><%= r.asset || '—' %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
+        <% }) %>
+      </tbody>
+    </table>
   <% } %>
 </div>
+

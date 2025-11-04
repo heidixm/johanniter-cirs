@@ -1,71 +1,87 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title><%= typeof title !== 'undefined' ? title : 'Johanniter Österreich – CIRS' %></title>
-  <link rel="icon" href="data:,">
+  <title><%= title || 'Johanniter Österreich – CIRS' %></title>
+
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
   <style>
-    :root {
-      --j-red:#c4001a; --j-red-dark:#990014; --bg:#f7f7f7; --fg:#222;
-      --muted:#666; --ok:#0a7a2a; --warn:#b35600;
+    :root{
+      --bg:#f6f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280;
+      --brand:#b0001c; --brand-600:#8e0017; --line:#e5e7eb;
+      --focus:#2563eb; --success:#10b981;
     }
-    html,body {margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif; color:var(--fg); background:var(--bg);}
-    .wrap {max-width:980px; margin:24px auto 64px; padding:0 16px;}
-    header {display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;}
-    .header-left {display:flex; flex-direction:column;}
-    .header-right {flex-shrink:0; display:flex; align-items:center; gap:12px;}
-    .johanniter-logo {height:60px; width:auto; object-fit:contain;}
-    h1 {font-size:1.4rem; margin:0;}
-    .muted {color:var(--muted); font-size:.92rem;}
-    .card {background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.06); padding:18px;}
-    .grid {display:grid; gap:12px; grid-template-columns:1fr; }
-    @media (min-width:720px){ .grid.two {grid-template-columns:1fr 1fr;} }
-    label {font-weight:600; display:block; margin-bottom:6px;}
-    input, select, textarea {width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #ddd; border-radius:10px; font:inherit; background:#fff;}
-    textarea {min-height:140px; resize:vertical;}
-    .req::after {content:" *"; color:var(--j-red); font-weight:700;}
-    .row {display:flex; gap:10px; align-items:center;}
-    .row input[type="checkbox"] {width:auto;}
-    .actions {display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:10px;}
-    button {border:0; border-radius:12px; padding:12px 16px; font-weight:700; cursor:pointer;}
-    .btn-primary {background:var(--j-red); color:#fff;}
-    .btn-primary:hover {background:var(--j-red-dark);}
-    .btn-ghost {background:transparent; color:var(--j-red); font-weight:600;}
-    .btn-link {background:transparent; color:var(--j-red); text-decoration:underline; padding:6px 8px; border-radius:8px;}
-    .alert {padding:12px 14px; border-radius:10px; background:#fff3f3; border:1px solid #ffd4d4; color:#7a0f0f;}
-    .success {background:#eef8f0; border:1px solid #cfe8d6; color:var(--ok);}
-    .warning {background:#fff6ea; border:1px solid #ffe4c2; color:var(--warn);}
-    table {width:100%; border-collapse:collapse;}
-    th, td {text-align:left; padding:10px 8px; border-bottom:1px solid #eee;}
-    th {font-size:.9rem; color:#555;}
-    tr:hover {background:#fafafa;}
-    .topbar-actions {display:flex; gap:10px; align-items:center;}
-    /* Modal */
-    .modal-backdrop {position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:999;}
-    .modal-backdrop[aria-hidden="false"] {display:flex;}
-    .modal {width:min(720px, calc(100% - 32px)); background:#fff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,.25);}
-    .modal__header {background:var(--j-red); color:#fff; padding:16px 18px;}
-    .modal__body {padding:16px 18px; line-height:1.4;}
-    .modal__footer {padding:14px 18px; display:flex; gap:10px; justify-content:flex-end;}
-    .kbd {font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f1f1f1; padding:0 6px; border-radius:6px;}
-    .badge {display:inline-block; background:#f2f2f2; border-radius:999px; padding:2px 10px; font-size:.8rem;}
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{
+      font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg); color:var(--text); line-height:1.5;
+    }
+
+    .header{
+      position:sticky; top:0; z-index:20;
+      background:rgba(255,255,255,0.9);
+      backdrop-filter:saturate(150%) blur(8px);
+      border-bottom:1px solid var(--line);
+    }
+    .header-inner{
+      max-width:980px; margin:0 auto; padding:10px 16px;
+      display:flex; align-items:center; gap:14px;
+    }
+    .logo{display:flex; align-items:center; gap:10px; text-decoration:none; color:inherit;}
+    .logo img{height:44px; width:auto; display:block;}
+    .app-title{font-weight:700; font-size:18px; letter-spacing:.2px;}
+    .container{ max-width:980px; margin:24px auto; padding:0 16px; }
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+          box-shadow:0 8px 30px rgba(17,24,39,.06);padding:20px;}
+    h1,h2{margin:0 0 10px}
+    .muted{color:var(--muted)}
+    .actions{display:flex; gap:10px; flex-wrap:wrap; margin:0 0 14px}
+    .btn{appearance:none; border:1px solid var(--brand); background:var(--brand);
+         color:#fff; padding:10px 14px; border-radius:10px; text-decoration:none;
+         font-weight:600; cursor:pointer; transition:transform .05s ease, background .2s ease;}
+    .btn:hover{background:var(--brand-600)}
+    .btn.secondary{background:#fff; color:var(--brand); border-color:var(--brand);}
+    .btn.secondary:hover{background:#fff0f2}
+    .table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden;
+           border-radius:12px; border:1px solid var(--line)}
+    .table th, .table td{padding:12px 14px; border-bottom:1px solid var(--line)}
+    .table thead th{background:#fafafa; text-align:left; font-weight:700}
+    .table tbody tr:last-child td{border-bottom:none}
+    .table a{color:var(--brand); text-decoration:none; font-weight:600}
+    form .grid{display:grid; gap:14px}
+    @media(min-width:760px){ form .grid{grid-template-columns:1fr 1fr} }
+    label{display:flex; flex-direction:column; gap:6px; font-weight:600}
+    input[type=text], input[type=datetime-local], input[type=email], textarea{
+      padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+      background:#fff; color:inherit; outline:none;
+    }
+    input:focus, textarea:focus{border-color:var(--focus); box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+    textarea{resize:vertical}
+    .success{background:rgba(16,185,129,.10);border:1px solid rgba(16,185,129,.35);
+             color:#065f46; padding:10px 12px; border-radius:10px;}
+    footer{color:var(--muted); text-align:center; padding:28px 0}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <div class="header-left">
-        <h1><a href="/" style="text-decoration:none; color:inherit;">Johanniter Österreich – CIRS</a></h1>
-        <div class="muted">Meldung von Material- &amp; Bedienungsfehlern (anonym möglich)</div>
-      </div>
-      <div class="header-right">
-        <a href="/new" class="btn-primary" title="Neue Meldung erfassen">Neue Meldung</a>
-        <img src="<%= logoUrl %>" alt="Logo der Johanniter-Unfall-Hilfe" class="johanniter-logo">
-      </div>
-    </header>
+  <header class="header">
+    <div class="header-inner">
+      <a class="logo" href="/">
+        <img src="<%= logoUrl || '/logo.png' %>" alt="Johanniter Logo">
+        <div class="app-title">CIRS</div>
+      </a>
+    </div>
+  </header>
 
+  <main class="container">
     <%- body %>
-  </div>
+  </main>
+
+  <footer>© Johanniter Österreich – CIRS</footer>
 </body>
 </html>
+

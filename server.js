@@ -1,4 +1,4 @@
-// server.js — Render-ready, EJS mit ejs-mate (layout()), SQLite in /tmp, Healthcheck
+// server.js — Render-ready, EJS mit ejs-mate (layout()), statische Assets, SQLite, Healthcheck
 
 import fs from "fs";
 import path from "path";
@@ -25,7 +25,6 @@ app.use(helmet());
 app.use(morgan(process.env.LOG_FORMAT || "tiny"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -35,19 +34,22 @@ app.use(
   })
 );
 
+/* ---------------------- Static files (logo, css, etc.) ---------------------- */
+app.use(express.static(path.join(__dirname, "public"))); // /public/logo.png -> /logo.png
+
 /* ---------------------- Views: EJS + ejs-mate (layout()) ---------------------- */
-app.engine("ejs", ejsMate);                 // <- aktiviert layout(), partials(), block(), etc.
+app.engine("ejs", ejsMate); // aktiviert layout(), partials(), block(), …
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-// Globale Variablen fürs Layout
+/* ---------------------- Globale View-Variablen ---------------------- */
 app.use((req, res, next) => {
-  res.locals.logoUrl =
-    "https://upload.wikimedia.org/wikipedia/commons/4/4d/Johanniter-Unfall-Hilfe_logo.svg";
+  res.locals.logoUrl = "/logo.png"; // lokales Logo
   next();
 });
 
 /* ---------------------- SQLite-Setup ---------------------- */
+// Render: Repo read-only; schreibbar ist /tmp oder gemountete Disk (DATABASE_PATH).
 const DEFAULT_LOCAL_DB = path.join(__dirname, "data", "cirs.db");
 const RUNTIME_DB =
   process.env.DATABASE_PATH ||
@@ -57,7 +59,6 @@ const REPO_DB = DEFAULT_LOCAL_DB;
 if (!fs.existsSync(path.dirname(RUNTIME_DB))) {
   fs.mkdirSync(path.dirname(RUNTIME_DB), { recursive: true });
 }
-
 try {
   if (!fs.existsSync(RUNTIME_DB) && fs.existsSync(REPO_DB)) {
     fs.copyFileSync(REPO_DB, RUNTIME_DB);
@@ -69,7 +70,6 @@ try {
 
 const db = new Database(RUNTIME_DB);
 db.pragma("journal_mode = WAL");
-
 db.exec(`
   CREATE TABLE IF NOT EXISTS reports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,7 +113,6 @@ app.get("/", (req, res, next) => {
          ORDER BY id DESC`
       )
       .all();
-    // title/locals kommen hier rein; dein list.ejs kann optional layout('layout', { title, logoUrl }) aufrufen
     res.render("list", {
       title: "CIRS – Übersicht",
       rows,
@@ -131,7 +130,12 @@ app.get("/report/:id", (req, res, next) => {
       .prepare(`SELECT * FROM reports WHERE id = ?`)
       .get(Number(req.params.id));
     if (!row) return res.status(404).type("text").send("Not found");
-    res.render("new", { readonly: true, preset: row, showDisclaimer: false, title: `Meldung #${row.id}` });
+    res.render("new", {
+      readonly: true,
+      preset: row,
+      showDisclaimer: false,
+      title: `Meldung #${row.id}`,
+    });
   } catch (err) {
     next(err);
   }
@@ -194,7 +198,7 @@ app.post("/submit", (req, res, next) => {
   }
 });
 
-// Fehlerbehandlung
+/* ---------------------- Error Handling ---------------------- */
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).type("text").send("Interner Fehler");

@@ -1,11 +1,9 @@
-# Node.js build artefacts
+# Node
 node_modules/
 package-lock.json
 
-# Environment & secrets
+# Secrets & lokale DB
 .env
-
-# SQLite database & data files
 cirs.db
 *.db
 data/
@@ -15,6 +13,6 @@ var/
 npm-debug.log*
 *.log
 
-# System files
+# macOS/Win
 .DS_Store
 Thumbs.db
