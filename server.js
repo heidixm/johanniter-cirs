@@ -1,4 +1,4 @@
-// server.js – Johanniter Österreich CIRS System (Render-kompatibel, kein native Modul)
+// server.js – Johanniter Österreich CIRS System (stabil & Render-ready)
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -16,26 +16,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 
+// --- TEMPLATE ENGINE ---
 app.engine("ejs", ejsMate);
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
+// --- MIDDLEWARE ---
 app.use(helmet());
 app.use(morgan("dev"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+// --- STATIC FILES ---
 app.use(express.static(path.join(__dirname, "public")));
 
-const DB_PATH = process.env.DATABASE_PATH || (process.env.RENDER ? "/tmp/cirs.db" : path.join(__dirname, "data", "cirs.db"));
+// --- DATABASE SETUP ---
+// 👉 persistente Datei unter /data/cirs.db (bleibt über Deploys erhalten)
+const DB_PATH = path.join(__dirname, "data", "cirs.db");
+
+// Stelle sicher, dass der data-Ordner existiert
+const dataDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 let db;
 (async () => {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
   db = await open({
     filename: DB_PATH,
-    driver: sqlite3.Database
+    driver: sqlite3.Database,
   });
 
   await db.exec(`
@@ -53,31 +60,48 @@ let db;
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
   console.log("📘 Datenbank bereit:", DB_PATH);
 })();
 
 // --- ROUTES ---
 
-// Übersicht
+// Übersicht aller Meldungen
 app.get("/", async (req, res) => {
+  // warte kurz, falls DB-Init beim Start noch läuft
+  if (!db) await new Promise(r => setTimeout(r, 300));
+
   const rows = await db.all("SELECT * FROM reports ORDER BY id DESC");
   res.render("list", { title: "CIRS Übersicht", rows });
 });
 
-// Neues Formular
+// Formularseite
 app.get("/new", (req, res) => {
   res.render("new", { title: "Neue CIRS-Meldung" });
 });
 
-// Meldung speichern
+// API-Endpoint für neue Meldung
 app.post("/api/report", async (req, res) => {
   try {
-    const { category, title, location, asset, description, immediate, when, contactName, contactEmail } = req.body;
+    const {
+      category,
+      title,
+      location,
+      asset,
+      description,
+      immediate,
+      when,
+      contactName,
+      contactEmail,
+    } = req.body;
+
     await db.run(
-      `INSERT INTO reports (category, title, location, asset, description, immediate, when_ts, contact_name, contact_email)
+      `INSERT INTO reports
+       (category, title, location, asset, description, immediate, when_ts, contact_name, contact_email)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [category, title, location, asset, description, immediate, when, contactName, contactEmail]
     );
+
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error("❌ Fehler beim Speichern:", err);
@@ -85,20 +109,25 @@ app.post("/api/report", async (req, res) => {
   }
 });
 
-// Detailseite
+// Einzelmeldung ansehen (read-only)
 app.get("/report/:id", async (req, res) => {
   const report = await db.get("SELECT * FROM reports WHERE id = ?", req.params.id);
   if (!report) return res.status(404).send("Meldung nicht gefunden.");
+
   res.render("new", { title: `Meldung #${report.id}`, p: report, readonly: true });
 });
 
-// Fehler
+// --- ERROR HANDLING ---
 app.use((req, res) => res.status(404).send("Seite nicht gefunden"));
 app.use((err, req, res, next) => {
-  console.error("❌ [ERROR]", err);
-  res.status(500).send("Interner Fehler");
+  console.error("❌ [ERROR]", err.stack || err);
+  res.status(500).send("Interner Fehler – siehe Logs.");
 });
 
+// --- START SERVER ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 CIRS läuft auf Port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 CIRS läuft auf Port ${PORT}`);
+});
+
 
