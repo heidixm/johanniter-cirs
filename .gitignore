@@ -16,3 +16,9 @@ npm-debug.log*
 # macOS/Win
 .DS_Store
 Thumbs.db
+
+# --- force track local logo ---
+!public/
+!public/**/
+!public/logo.png
+

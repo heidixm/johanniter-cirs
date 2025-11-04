@@ -1,7 +1,7 @@
 <% const isReadonly = typeof readonly !== 'undefined' ? readonly : false; %>
 <% const p = preset || {}; %>
 <% const pageTitle = isReadonly ? `Meldung #${p.id}` : 'Neue Meldung'; %>
-<% layout('layout', { title: pageTitle, logoUrl: '/logo.png' }); %>
+<% layout('layout', { title: pageTitle }); %>
 
 <div class="card">
   <h2><%= pageTitle %></h2>
@@ -112,4 +112,3 @@
     </form>
   <% } %>
 </div>
-
