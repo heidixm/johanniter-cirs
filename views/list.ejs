@@ -1,29 +1,16 @@
-<% layout('layout', { title: 'CIRS – Übersicht' }); %>
-
-<div class="actions">
-  <a class="btn" href="/new">Neue Meldung erfassen</a>
-</div>
+<% layout('layout', { title: 'CIRS Übersicht' }); %>
 
 <div class="card">
-  <h2>Übersicht Meldungen</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <h2>Übersicht der Meldungen</h2>
+    <a href="/new" class="btn btn-primary">Neue Meldung</a>
+  </div>
 
-  <% if (ok) { %>
-    <div class="success" style="margin:12px 0;">Vielen Dank! Ihre Meldung wurde gespeichert und weitergeleitet.</div>
-  <% } %>
-
-  <% if (!rows || !rows.length) { %>
-    <p class="muted" style="margin-top:10px;">Noch keine Einträge vorhanden.</p>
+  <% if (!rows.length) { %>
+    <p class="muted">Noch keine Meldungen vorhanden.</p>
   <% } else { %>
-    <table class="table" style="margin-top:14px;">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Kategorie</th>
-          <th>Titel</th>
-          <th>Ort</th>
-          <th>Erfasst am</th>
-        </tr>
-      </thead>
+    <table style="margin-top:12px;">
+      <thead><tr><th>ID</th><th>Kategorie</th><th>Titel</th><th>Ort</th><th>Datum</th></tr></thead>
       <tbody>
         <% rows.forEach(r => { %>
           <tr>
@@ -38,3 +25,4 @@
     </table>
   <% } %>
 </div>
+
