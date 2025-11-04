@@ -1,4 +1,4 @@
-// server.js — Render-ready, EJS-Layouts, SQLite in /tmp, Healthcheck, layout()-Shim
+// server.js — Render-ready, EJS mit ejs-mate (layout()), SQLite in /tmp, Healthcheck
 
 import fs from "fs";
 import path from "path";
@@ -7,10 +7,10 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
-import ejsLayouts from "express-ejs-layouts";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import Database from "better-sqlite3";
+import ejsMate from "ejs-mate";
 
 dotenv.config();
 
@@ -35,26 +35,10 @@ app.use(
   })
 );
 
-/* ---------------------- Views (EJS + Layouts) ---------------------- */
+/* ---------------------- Views: EJS + ejs-mate (layout()) ---------------------- */
+app.engine("ejs", ejsMate);                 // <- aktiviert layout(), partials(), block(), etc.
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-app.use(ejsLayouts);
-app.set("layout", "layout");
-
-// 🔧 Shim: Falls in einer View noch `layout('layout', {...})` steht (ejs-locals Syntax),
-// definieren wir eine harmlose Dummy-Funktion, damit kein ReferenceError entsteht.
-app.use((req, res, next) => {
-  if (typeof res.locals.layout !== "function") {
-    res.locals.layout = function shimLayout(_name, locals) {
-      // Optional: Werte wie title/logoUrl in res.locals übernehmen
-      if (locals && typeof locals === "object") {
-        Object.assign(res.locals, locals);
-      }
-      // Keine Rückgabe nötig – express-ejs-layouts rendert <%- body %> ohnehin.
-    };
-  }
-  next();
-});
 
 // Globale Variablen fürs Layout
 app.use((req, res, next) => {
@@ -115,8 +99,11 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 }
 
 /* ---------------------- Routes ---------------------- */
+
+// Healthcheck für Render
 app.get("/healthz", (req, res) => res.type("text").send("ok"));
 
+// Übersicht
 app.get("/", (req, res, next) => {
   try {
     const rows = db
@@ -126,6 +113,7 @@ app.get("/", (req, res, next) => {
          ORDER BY id DESC`
       )
       .all();
+    // title/locals kommen hier rein; dein list.ejs kann optional layout('layout', { title, logoUrl }) aufrufen
     res.render("list", {
       title: "CIRS – Übersicht",
       rows,
@@ -136,22 +124,25 @@ app.get("/", (req, res, next) => {
   }
 });
 
+// Details
 app.get("/report/:id", (req, res, next) => {
   try {
     const row = db
       .prepare(`SELECT * FROM reports WHERE id = ?`)
       .get(Number(req.params.id));
     if (!row) return res.status(404).type("text").send("Not found");
-    res.render("new", { readonly: true, preset: row, showDisclaimer: false });
+    res.render("new", { readonly: true, preset: row, showDisclaimer: false, title: `Meldung #${row.id}` });
   } catch (err) {
     next(err);
   }
 });
 
+// Formular
 app.get("/new", (req, res) => {
-  res.render("new", { readonly: false, showDisclaimer: true });
+  res.render("new", { readonly: false, showDisclaimer: true, title: "Neue Meldung" });
 });
 
+// Submit
 app.post("/submit", (req, res, next) => {
   try {
     const required = ["category", "when", "location", "title", "description"];
@@ -203,6 +194,7 @@ app.post("/submit", (req, res, next) => {
   }
 });
 
+// Fehlerbehandlung
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).type("text").send("Interner Fehler");
